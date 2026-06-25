@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local editor / agent config and memory
+.claude/
+
+# Logs and env
+*.log
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local verification artifacts
+verify_*.png
