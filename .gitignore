@@ -7,6 +7,9 @@ dist/
 # Local editor / agent config and memory
 .claude/
 
+# Third-party tools cloned locally (e.g. LLMmap fingerprinting model + weights)
+tools/
+
 # Logs and env
 *.log
 .env

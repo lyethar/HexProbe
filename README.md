@@ -16,6 +16,7 @@ A purpose-built, browser-based red-teaming workbench for security professionals 
 | **Prompt Lab** | Log prompt/response pairs against the active session. Classify outcome (vulnerable / partial / not-vulnerable / inconclusive) and severity. Promote any finding directly to the findings tracker. |
 | **Direct Interaction** | Turn a sample HTTP request/response into a live probing console. An AI provider (Anthropic / OpenAI / Ollama) reads your sample exchange and generates a replayable *interaction spec* — URL, headers, body template, and the response path to the model's reply. Fire prompts at the real endpoint and inspect exact raw HTTP with the Verbose toggle. |
 | **Temperature Probe** | Reuses the Direct Interaction spec to send N identical requests and analyse the endpoint's behaviour: determinism (fully / partially / non-deterministic), response-length token statistics, and rate-limit detection (HTTP 429). Sequential or concurrent firing modes, configurable request rate, per-request results table, and CSV export. |
+| **Model Fingerprint** | Identify the LLM behind an endpoint with [LLMmap](https://github.com/pasquini-dario/LLMmap) — *"like nmap, but for LLMs."* Sends 8 fixed behavioural probe queries to the target (auto via the Direct Interaction spec, or paste responses manually) and matches the traces against signatures for 50+ known models. Inference runs in a local Python sidecar; results are ranked by distance. |
 | **CSV Import** | Bulk-import test entries from a CSV file. Includes a copyable LLM format prompt so you can paste unstructured notes into any LLM and get back a correctly formatted CSV. Preview and validate rows before committing. |
 | **AI Evaluator** | Feed your logged entries (or a separate CSV) to an LLM judge — local **Ollama** or hosted **Anthropic** / **OpenAI** via your own API key. The evaluator scores each prompt/response pair as SUCCEEDED / PARTIAL / FAILED / INCONCLUSIVE, with confidence and reasoning. Results include an attack success rate, per-category breakdown, and CSV export. |
 | **Exploit Chain** | Drag-and-drop ReactFlow canvas for modelling multi-step attack paths. Connect attack vectors → vulnerabilities → findings → impacts → mitigations. |
@@ -33,6 +34,7 @@ All data is stored in browser `localStorage` — nothing is sent to any server e
 | npm | 9 or later |
 | Ollama *(optional)* | Latest — only needed if you want a fully local AI Evaluator / script builder |
 | Anthropic or OpenAI API key *(optional)* | Only needed if you prefer a hosted model for the AI Evaluator, Direct Interaction script builder, or Temperature Probe |
+| Python 3.11 + LLMmap *(optional)* | Only needed for the **Model Fingerprint** tab — see [scripts/README.md](scripts/README.md) |
 
 ---
 
@@ -106,6 +108,23 @@ Paste an Anthropic API key in the configure panel and pick a Claude model (e.g. 
 Paste an OpenAI API key and pick a model (e.g. `gpt-4o`, `gpt-4o-mini`). Requests run directly from the browser.
 
 > **Note on API keys:** keys are stored only in your browser's `localStorage` and sent only to the corresponding provider. Treat the machine running HexProbe as trusted.
+
+---
+
+## Model Fingerprinting setup (LLMmap)
+
+The **Model Fingerprint** tab uses [LLMmap](https://github.com/pasquini-dario/LLMmap) to identify the LLM behind an endpoint. Because LLMmap is PyTorch-based, it runs as a small local Python sidecar that HexProbe calls over HTTP (just like Ollama).
+
+```bash
+# From the HexProbe repo root:
+git clone https://github.com/pasquini-dario/LLMmap tools/LLMmap   # gitignored
+pip install -r tools/LLMmap/requirements.txt                      # Python 3.11 recommended
+python scripts/llmmap_server.py                                   # serves on http://localhost:8765
+```
+
+Then open **Prompt Lab → Model Fingerprint → Connect**. The first request downloads the embedding model (~2 GB) once. To try the UI without installing PyTorch, run `python scripts/llmmap_server.py --mock`.
+
+Full details, options, and the API are in **[scripts/README.md](scripts/README.md)**.
 
 ---
 
@@ -215,6 +234,7 @@ src/
 │   ├── PromptLab.tsx         # Test Lab + Temperature Probe + CSV Import + AI Evaluator tabs
 │   ├── DirectInteraction.tsx # Sample request/response → live probing console
 │   ├── TemperatureProbe.tsx  # Determinism / rate-limit probing
+│   ├── ModelFingerprint.tsx  # LLM fingerprinting UI (LLMmap sidecar client)
 │   ├── CsvImport.tsx         # CSV ingestion with preview and validation
 │   ├── EvaluationPanel.tsx   # Multi-provider attack evaluation engine
 │   ├── PromptLibrary.tsx     # Searchable/filterable prompt browser
@@ -228,8 +248,12 @@ src/
 │   └── index.ts              # TypeScript interfaces
 └── utils/
     ├── aiProvider.ts         # Shared LLM provider config + chat completion (Ollama/Anthropic/OpenAI)
-    ├── interactionSpec.ts    # Interaction-spec model + endpoint replay (shared by Direct Interaction & Temperature Probe)
+    ├── interactionSpec.ts    # Interaction-spec model + endpoint replay (shared by Direct Interaction, Temperature Probe & Model Fingerprint)
+    ├── llmmap.ts             # LLMmap sidecar HTTP client
     └── csvParser.ts          # RFC-4180 CSV parser
+
+scripts/
+└── llmmap_server.py         # Local PyTorch sidecar wrapping LLMmap (see scripts/README.md)
 ```
 
 ---

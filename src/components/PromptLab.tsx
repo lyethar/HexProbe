@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   FlaskConical, Copy, Check, Plus, Trash2, Edit2,
   BookOpen, Tag, X, Save, AlertTriangle, ChevronDown, ChevronUp,
-  Clock, CheckCircle, HelpCircle, Minus, Upload, Bot, Thermometer,
+  Clock, CheckCircle, HelpCircle, Minus, Upload, Bot, Thermometer, Fingerprint,
 } from 'lucide-react';
 import type { Store } from '../hooks/useStore';
 import type { Severity, Outcome, TestEntry } from '../types';
@@ -10,8 +10,9 @@ import { PROMPT_LIBRARY } from '../data/prompts';
 import CsvImport from './CsvImport';
 import EvaluationPanel from './EvaluationPanel';
 import TemperatureProbe from './TemperatureProbe';
+import ModelFingerprint from './ModelFingerprint';
 
-type ActiveTab = 'lab' | 'temp' | 'csv' | 'eval';
+type ActiveTab = 'lab' | 'temp' | 'fingerprint' | 'csv' | 'eval';
 
 interface Props { store: Store }
 
@@ -282,10 +283,11 @@ export default function PromptLab({ store }: Props) {
       {/* ── Tab bar ── */}
       <div className="flex gap-1 border-b border-cyber-border">
         {([
-          { id: 'lab',  label: 'Test Lab',          Icon: FlaskConical },
-          { id: 'temp', label: 'Temperature Probe', Icon: Thermometer },
-          { id: 'csv',  label: 'CSV Import',        Icon: Upload },
-          { id: 'eval', label: 'AI Evaluator',      Icon: Bot },
+          { id: 'lab',         label: 'Test Lab',          Icon: FlaskConical },
+          { id: 'temp',        label: 'Temperature Probe', Icon: Thermometer },
+          { id: 'fingerprint', label: 'Model Fingerprint', Icon: Fingerprint },
+          { id: 'csv',         label: 'CSV Import',        Icon: Upload },
+          { id: 'eval',        label: 'AI Evaluator',      Icon: Bot },
         ] as const).map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -304,6 +306,9 @@ export default function PromptLab({ store }: Props) {
 
       {/* ── Temperature Probe tab ── */}
       {activeTab === 'temp' && <TemperatureProbe store={store} />}
+
+      {/* ── Model Fingerprint tab ── */}
+      {activeTab === 'fingerprint' && <ModelFingerprint store={store} />}
 
       {/* ── CSV Import tab ── */}
       {activeTab === 'csv' && <CsvImport store={store} />}
