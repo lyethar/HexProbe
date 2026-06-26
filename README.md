@@ -153,6 +153,70 @@ Use **Exploit Chain** to diagram the attack path. From any Test Log entry marked
 
 ---
 
+## Architecture: Direct Interaction & the interaction spec
+
+Direct Interaction is the engine the other live-probing features are built on. Rather than hard-coding how to talk to a target API, it turns one sample exchange into a small, declarative **interaction spec** that any feature can replay. That spec — not bespoke per-feature HTTP code — is the shared contract, so **Temperature Probe** and **Model Fingerprint** reuse the exact same request/response plumbing.
+
+All of this lives in [`src/utils/interactionSpec.ts`](src/utils/interactionSpec.ts).
+
+### The interaction spec
+
+When you paste a sample HTTP request and response into Direct Interaction, the configured AI provider distils them into this shape:
+
+```jsonc
+{
+  "name": "Acme Chat API",
+  "method": "POST",
+  "url": "https://api.example.com/v1/chat",
+  "headers": { "Authorization": "Bearer …", "Content-Type": "application/json" },
+  "bodyTemplate": "{\"model\":\"x\",\"messages\":[{\"role\":\"user\",\"content\":\"{{PROMPT}}\"}]}",
+  "responsePath": "choices.0.message.content",
+  "notes": ""
+}
+```
+
+- **`bodyTemplate`** is the request body with the user-prompt position replaced by the literal token `{{PROMPT}}`. `buildBody()` substitutes the prompt at send time, JSON-escaping it when the body is JSON so quotes/newlines can't break the payload.
+- **`responsePath`** is a dot path (numeric indices for arrays, e.g. `choices.0.message.content`) that `getByPath()` uses to pull the assistant's reply out of the parsed JSON. An empty string means "use the whole body."
+- The spec is **declarative data, never executed code** — HexProbe interprets it; it doesn't `eval` anything.
+
+The spec is validated by `validateSpec()` and persisted to `localStorage` under the key `ai-direct-interaction-v1`, so it survives reloads and is readable by the other tabs via `loadInteractionSpec()`.
+
+### One replay function, three features
+
+The heart of the module is **`sendToTarget(spec, prompt)`** — it builds the body, fires the request, extracts `replyText` via `responsePath`, and returns a structured `TargetResult` (`{ ok, status, headers, requestBody, body, replyText, responseTimeMs, conversationId, error }`). It **never throws**: transport/CORS failures come back as a result with `ok: false` and an `error` string, so callers can render failures uniformly. `isRateLimited()` flags HTTP 429 / "rate limit" responses.
+
+```
+                 Direct Interaction
+            (paste sample request + response)
+                         │
+            AI provider builds the spec ──► validateSpec()
+                         │
+                         ▼
+        localStorage  "ai-direct-interaction-v1"
+                         │  loadInteractionSpec()
+        ┌────────────────┼────────────────────────┐
+        ▼                ▼                          ▼
+ Direct Interaction  Temperature Probe        Model Fingerprint
+ (interactive console) (N identical sends)    (8 LLMmap probes)
+        └──────────── all call sendToTarget(spec, prompt) ───────────┘
+                         │
+                         ▼
+                 live target endpoint
+```
+
+### How Temperature Probe reuses it
+
+Temperature Probe doesn't define any of its own networking. It calls `loadInteractionSpec()` to pick up the spec you built in Direct Interaction (and shows a prompt to go build one if none exists), then loops over the **same** `sendToTarget()` call, sending one identical prompt N times. Because every send returns a uniform `TargetResult`, the probe can:
+
+- count unique `replyText` values for the **determinism** verdict (fully / partially / non-deterministic),
+- aggregate `replyText` token lengths for the **response-length statistics**,
+- watch `status` / `error` through `isRateLimited()` to **detect throttling** and stop early,
+- record `responseTimeMs` and `conversationId` per request for the CSV export.
+
+**Model Fingerprint** follows the identical pattern: in Auto mode it sends LLMmap's 8 fixed probe queries through `sendToTarget()` and forwards the collected replies to the sidecar. Add a new live-probing feature and it inherits target configuration, prompt injection, response extraction, and error/CORS handling for free.
+
+---
+
 ## CSV Import format
 
 The CSV importer accepts files with the following columns:
